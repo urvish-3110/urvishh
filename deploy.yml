@@ -1,0 +1,41 @@
+name: Deploy Website
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Build Docker Image
+      run: docker build -t static-site .
+
+    - name: Save Image
+      run: docker save static-site > static-site.tar
+
+    - name: Copy to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "static-site.tar"
+        target: "/home/ubuntu"
+
+    - name: Deploy on EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          docker stop static-site || true
+          docker rm static-site || true
+          docker load < static-site.tar
+          docker run -d -p 80:80 --name static-site static-site
